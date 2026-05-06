@@ -116,3 +116,32 @@ final estimatedWaitProvider =
 final serviceTypeListProvider = Provider<List<ServiceType>>(
   (_) => ServiceCatalog.all,
 );
+
+// ─────────────────────────────────────────────────────────────────────────────
+// UI State: selectedAppointmentIdProvider
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Holds the ID of the appointment the user has selected as "mine"
+/// in the Queue Status screen.
+///
+/// Initialised to the first scheduled appointment's ID; the user can change
+/// this via a temporary dropdown (will be replaced by auth in Milestone 4).
+/// TODO (Milestone 4): Remove — derive "my appointment" from logged-in user ID.
+final selectedAppointmentIdProvider = StateProvider<String?>((ref) {
+  final scheduled = ref.watch(scheduledQueueProvider);
+  return scheduled.isNotEmpty ? scheduled.first.id : null;
+});
+
+/// Derives the full [Appointment] object for the currently-selected "my"
+/// appointment, reacting to both the selector and live queue mutations.
+final myAppointmentProvider = Provider<Appointment?>((ref) {
+  final selectedId = ref.watch(selectedAppointmentIdProvider);
+  if (selectedId == null) return null;
+  final all = ref.watch(appointmentListProvider);
+  try {
+    return all.firstWhere((a) => a.id == selectedId);
+  } catch (_) {
+    return null;
+  }
+});
+
