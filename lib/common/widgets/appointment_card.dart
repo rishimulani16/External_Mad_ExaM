@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
-import '../models/appointment_model.dart';
+import '../../core/domain/appointment.dart';
 import 'status_badge.dart';
 
 /// Reusable appointment list card used in AppointmentListScreen and
@@ -13,7 +13,7 @@ class AppointmentCard extends StatelessWidget {
     this.showQueueBadge = false,
   });
 
-  final AppointmentModel appointment;
+  final Appointment appointment;
   final VoidCallback? onTap;
   final bool showQueueBadge;
 
@@ -21,7 +21,7 @@ class AppointmentCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final textTheme = Theme.of(context).textTheme;
     final colorScheme = Theme.of(context).colorScheme;
-    final formattedDate = DateFormat('dd MMM yyyy').format(appointment.date);
+    final formattedDate = DateFormat('dd MMM yyyy').format(appointment.dateTime);
 
     return Card(
       clipBehavior: Clip.antiAlias,
@@ -40,7 +40,7 @@ class AppointmentCard extends StatelessWidget {
                     radius: 20,
                     backgroundColor: colorScheme.primaryContainer,
                     child: Text(
-                      appointment.customerName[0].toUpperCase(),
+                      appointment.userName[0].toUpperCase(),
                       style: TextStyle(
                         color: colorScheme.onPrimaryContainer,
                         fontWeight: FontWeight.bold,
@@ -53,7 +53,7 @@ class AppointmentCard extends StatelessWidget {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          appointment.customerName,
+                          appointment.userName,
                           style: textTheme.titleSmall?.copyWith(
                             fontWeight: FontWeight.w700,
                           ),
@@ -94,7 +94,7 @@ class AppointmentCard extends StatelessWidget {
                 children: [
                   _InfoChip(
                     icon: Icons.access_time_outlined,
-                    label: appointment.timeSlot,
+                    label: appointment.timeSlotLabel,
                   ),
                   if (showQueueBadge &&
                       appointment.status == AppointmentStatus.scheduled) ...[

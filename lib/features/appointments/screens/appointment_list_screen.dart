@@ -1,21 +1,23 @@
 import 'package:flutter/material.dart';
-import '../../../common/mock/mock_data.dart';
-import '../../../common/models/appointment_model.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../core/domain/appointment.dart';
 import '../../../common/widgets/appointment_card.dart';
 import '../../../core/constants/app_constants.dart';
+import '../../../core/state/providers.dart';
 
 /// AppointmentListScreen — shows all user appointments with status tabs and FAB.
 /// Used as Tab 0 inside HomeScreen shell, and as standalone route.
-class AppointmentListScreen extends StatefulWidget {
+class AppointmentListScreen extends ConsumerStatefulWidget {
   const AppointmentListScreen({super.key, this.isEmbedded = false});
 
   final bool isEmbedded;
 
   @override
-  State<AppointmentListScreen> createState() => _AppointmentListScreenState();
+  ConsumerState<AppointmentListScreen> createState() =>
+      _AppointmentListScreenState();
 }
 
-class _AppointmentListScreenState extends State<AppointmentListScreen>
+class _AppointmentListScreenState extends ConsumerState<AppointmentListScreen>
     with SingleTickerProviderStateMixin {
   late final TabController _tabController;
 
@@ -27,9 +29,9 @@ class _AppointmentListScreenState extends State<AppointmentListScreen>
     Tab(text: 'Cancelled'),
   ];
 
-  List<AppointmentModel> _filtered(AppointmentStatus? status) {
-    if (status == null) return MockData.appointments;
-    return MockData.appointments.where((a) => a.status == status).toList();
+  List<Appointment> _filtered(List<Appointment> all, AppointmentStatus? status) {
+    if (status == null) return all;
+    return all.where((a) => a.status == status).toList();
   }
 
   @override
@@ -46,6 +48,7 @@ class _AppointmentListScreenState extends State<AppointmentListScreen>
 
   @override
   Widget build(BuildContext context) {
+    final all = ref.watch(appointmentListProvider);
     final content = Column(
       children: [
         // --- Tab bar ---
@@ -66,17 +69,16 @@ class _AppointmentListScreenState extends State<AppointmentListScreen>
             tabs: _tabs,
           ),
         ),
-
         // --- Appointment lists per tab ---
         Expanded(
           child: TabBarView(
             controller: _tabController,
             children: [
-              _AppointmentTab(appointments: _filtered(null)),
-              _AppointmentTab(appointments: _filtered(AppointmentStatus.scheduled)),
-              _AppointmentTab(appointments: _filtered(AppointmentStatus.inProgress)),
-              _AppointmentTab(appointments: _filtered(AppointmentStatus.completed)),
-              _AppointmentTab(appointments: _filtered(AppointmentStatus.cancelled)),
+              _AppointmentTab(appointments: _filtered(all, null)),
+              _AppointmentTab(appointments: _filtered(all, AppointmentStatus.scheduled)),
+              _AppointmentTab(appointments: _filtered(all, AppointmentStatus.inProgress)),
+              _AppointmentTab(appointments: _filtered(all, AppointmentStatus.completed)),
+              _AppointmentTab(appointments: _filtered(all, AppointmentStatus.cancelled)),
             ],
           ),
         ),
@@ -119,7 +121,7 @@ class _AppointmentListScreenState extends State<AppointmentListScreen>
 class _AppointmentTab extends StatelessWidget {
   const _AppointmentTab({required this.appointments});
 
-  final List<AppointmentModel> appointments;
+  final List<Appointment> appointments;
 
   @override
   Widget build(BuildContext context) {
