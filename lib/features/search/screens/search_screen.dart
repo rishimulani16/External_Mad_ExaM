@@ -1,31 +1,34 @@
-/// Search & Filter Screen — fully wired to Riverpod.
+/// Search & Filter Screen — wired to [filterProvider] and
+/// [filteredAppointmentsProvider].
 ///
-/// Reads [appointmentListProvider] and applies in-memory filtering.
-/// No Hive / Firestore queries yet — all filtering is client-side.
-/// Milestone 4: replace filter logic with a search provider backed by Hive.
+/// This screen WRITES filter state to [filterProvider] and READS results from
+/// [filteredAppointmentsProvider]. The same results are visible from
+/// [AppointmentListScreen] which also watches [filteredAppointmentsProvider].
+///
+/// Local widget state is used only for:
+///   - The [TextField] controller (UI concern, not business state).
+///   - Debounce timer for query updates.
 library;
 
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import '../../../core/domain/appointment.dart';
+import '../../../core/domain/filter_criteria.dart';
 import '../../../core/domain/service_type.dart';
 import '../../../core/state/providers.dart';
 import '../../../common/widgets/appointment_card.dart';
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Screen (standalone route + embedded tab)
-// ─────────────────────────────────────────────────────────────────────────────
+// ── Screen shell ──────────────────────────────────────────────────────────────
 
 class SearchScreen extends StatelessWidget {
   const SearchScreen({super.key, this.isEmbedded = false});
-
   final bool isEmbedded;
 
   @override
   Widget build(BuildContext context) {
     if (isEmbedded) return const _SearchBody();
-
     return Scaffold(
       appBar: AppBar(title: const Text('Search & Filter')),
       body: const _SearchBody(),
@@ -33,134 +36,135 @@ class SearchScreen extends StatelessWidget {
   }
 }
 
-// Also export the alias used in home_screen.dart as an embedded tab.
+// Alias used in home_screen.dart / any embedded reference.
 typedef SearchFilterScreen = SearchScreen;
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Body — ConsumerStatefulWidget so we own local filter state
-// ─────────────────────────────────────────────────────────────────────────────
+// ── Body ──────────────────────────────────────────────────────────────────────
 
 class _SearchBody extends ConsumerStatefulWidget {
   const _SearchBody();
-
   @override
   ConsumerState<_SearchBody> createState() => _SearchBodyState();
 }
 
 class _SearchBodyState extends ConsumerState<_SearchBody> {
-  final _searchCtrl = TextEditingController();
+  final _queryCtrl = TextEditingController();
+  Timer? _debounce;
 
-  // ── Filter state ────────────────────────────────────────────────────────────
-  String _query = '';
-  final Set<AppointmentStatus> _statusFilters = {};
-  ServiceType? _serviceFilter;
-  DateTimeRange? _dateRange;
+  @override
+  void initState() {
+    super.initState();
+    // Sync the text field with any pre-existing filterProvider query.
+    final existing = ref.read(filterProvider).query;
+    if (existing.isNotEmpty) _queryCtrl.text = existing;
+  }
 
   @override
   void dispose() {
-    _searchCtrl.dispose();
+    _debounce?.cancel();
+    _queryCtrl.dispose();
     super.dispose();
   }
 
-  // ── In-memory filter ────────────────────────────────────────────────────────
+  // ── Writes to filterProvider ─────────────────────────────────────────────
 
-  List<Appointment> _applyFilters(List<Appointment> all) {
-    return all.where((a) {
-      // Name / ID search
-      final q = _query.toLowerCase();
-      final matchesQuery = q.isEmpty ||
-          a.userName.toLowerCase().contains(q) ||
-          a.displayId.toLowerCase().contains(q);
-
-      // Status chips
-      final matchesStatus =
-          _statusFilters.isEmpty || _statusFilters.contains(a.status);
-
-      // Service type dropdown
-      final matchesService =
-          _serviceFilter == null || a.serviceType.id == _serviceFilter!.id;
-
-      // Date range
-      final matchesDate = _dateRange == null ||
-          (!a.dateTime.isBefore(_dateRange!.start) &&
-              !a.dateTime.isAfter(
-                  _dateRange!.end.add(const Duration(days: 1))));
-
-      return matchesQuery && matchesStatus && matchesService && matchesDate;
-    }).toList();
-  }
-
-  void _clearAll() {
-    _searchCtrl.clear();
-    setState(() {
-      _query = '';
-      _statusFilters.clear();
-      _serviceFilter = null;
-      _dateRange = null;
+  void _onQueryChanged(String v) {
+    _debounce?.cancel();
+    _debounce = Timer(const Duration(milliseconds: 300), () {
+      final c = ref.read(filterProvider);
+      ref.read(filterProvider.notifier).state = c.withQuery(v);
     });
   }
 
+  void _toggleStatus(AppointmentStatus s) {
+    final c = ref.read(filterProvider);
+    ref.read(filterProvider.notifier).state = c.toggleStatus(s);
+  }
+
+  void _setService(ServiceType? s) {
+    final c = ref.read(filterProvider);
+    ref.read(filterProvider.notifier).state =
+        c.copyWith(clearServiceType: s == null, serviceType: s);
+  }
+
   Future<void> _pickDateRange() async {
+    final c = ref.read(filterProvider);
+    final init = (c.dateFrom != null && c.dateTo != null)
+        ? DateTimeRange(start: c.dateFrom!, end: c.dateTo!)
+        : null;
+
     final picked = await showDateRangePicker(
       context: context,
       firstDate: DateTime.now().subtract(const Duration(days: 365)),
       lastDate: DateTime.now().add(const Duration(days: 90)),
-      initialDateRange: _dateRange,
+      initialDateRange: init,
       helpText: 'Filter by date range',
     );
-    if (picked != null) setState(() => _dateRange = picked);
+
+    if (picked != null) {
+      ref.read(filterProvider.notifier).state =
+          c.withDateRange(picked.start, picked.end);
+    }
   }
 
-  // ── Build ───────────────────────────────────────────────────────────────────
+  void _clearAll() {
+    _queryCtrl.clear();
+    ref.read(filterProvider.notifier).state = const FilterCriteria();
+  }
+
+  // ── Build ────────────────────────────────────────────────────────────────
 
   @override
   Widget build(BuildContext context) {
-    // ── Read live data from appointmentListProvider ──────────────────────────
-    final all = ref.watch(appointmentListProvider);           // reactive
-    final services = ref.watch(serviceTypeListProvider);      // static catalog
-    final results = _applyFilters(all);
+    // READS — reactive watches
+    final criteria = ref.watch(filterProvider);
+    final results  = ref.watch(filteredAppointmentsProvider);
+    final total    = ref.watch(appointmentListProvider).length;
+    final services = ref.watch(serviceTypeListProvider);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // ── Filter Panel ─────────────────────────────────────────────────────
+        // ── Filter Panel ─────────────────────────────────────────────────
         Material(
-          elevation: 1,
+          elevation: 2,
+          surfaceTintColor: Theme.of(context).colorScheme.surface,
           child: Padding(
             padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Search bar
+                // ── Query field ─────────────────────────────────────────
                 TextField(
                   key: const Key('field_search_query'),
-                  controller: _searchCtrl,
-                  onChanged: (v) => setState(() => _query = v),
+                  controller: _queryCtrl,
+                  onChanged: _onQueryChanged,
                   decoration: InputDecoration(
-                    hintText: 'Search by name or Appointment ID…',
+                    hintText: 'Search by name, ID, or service…',
                     prefixIcon: const Icon(Icons.search_rounded),
-                    suffixIcon: _query.isNotEmpty
+                    suffixIcon: criteria.query.isNotEmpty
                         ? IconButton(
                             icon: const Icon(Icons.clear_rounded, size: 18),
                             onPressed: () {
-                              _searchCtrl.clear();
-                              setState(() => _query = '');
+                              _queryCtrl.clear();
+                              ref.read(filterProvider.notifier).state =
+                                  ref.read(filterProvider).withQuery('');
                             },
                           )
                         : null,
-                    contentPadding:
-                        const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                    contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 16, vertical: 12),
                   ),
                 ),
                 const SizedBox(height: 12),
 
-                // Status filter chips
-                _FilterLabel('Status'),
+                // ── Status chips ────────────────────────────────────────
+                _SectionLabel('Status'),
                 const SizedBox(height: 6),
                 Wrap(
                   spacing: 6,
                   children: AppointmentStatus.values.map((s) {
-                    final on = _statusFilters.contains(s);
+                    final on = criteria.statuses.contains(s);
                     return FilterChip(
                       key: Key('chip_${s.name}'),
                       label: Text(s.displayName,
@@ -174,35 +178,31 @@ class _SearchBodyState extends ConsumerState<_SearchBody> {
                             ? Theme.of(context).colorScheme.primary
                             : Colors.grey.shade300,
                       ),
-                      onSelected: (_) => setState(() {
-                        on
-                            ? _statusFilters.remove(s)
-                            : _statusFilters.add(s);
-                      }),
+                      onSelected: (_) => _toggleStatus(s),
                     );
                   }).toList(),
                 ),
                 const SizedBox(height: 12),
 
-                // Service type + date range row
+                // ── Service type + date range row ───────────────────────
                 Row(children: [
                   Expanded(
                     child: DropdownButtonFormField<ServiceType?>(
                       key: const Key('field_service_filter'),
-                      value: _serviceFilter,
+                      value: criteria.serviceType,
                       decoration: const InputDecoration(
                         labelText: 'Service',
-                        contentPadding:
-                            EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                        contentPadding: EdgeInsets.symmetric(
+                            horizontal: 12, vertical: 10),
                         isDense: true,
                       ),
                       items: [
                         const DropdownMenuItem(
                             value: null, child: Text('All Services')),
-                        ...services.map((s) =>
-                            DropdownMenuItem(value: s, child: Text(s.name))),
+                        ...services.map((s) => DropdownMenuItem(
+                            value: s, child: Text(s.name))),
                       ],
-                      onChanged: (v) => setState(() => _serviceFilter = v),
+                      onChanged: _setService,
                     ),
                   ),
                   const SizedBox(width: 10),
@@ -211,10 +211,10 @@ class _SearchBodyState extends ConsumerState<_SearchBody> {
                     onPressed: _pickDateRange,
                     icon: const Icon(Icons.date_range_outlined, size: 16),
                     label: Text(
-                      _dateRange == null
+                      criteria.dateFrom == null
                           ? 'Dates'
-                          : '${DateFormat('dd MMM').format(_dateRange!.start)}'
-                              ' – ${DateFormat('dd MMM').format(_dateRange!.end)}',
+                          : '${DateFormat('dd MMM').format(criteria.dateFrom!)}'
+                              ' – ${DateFormat('dd MMM').format(criteria.dateTo!)}',
                       style: const TextStyle(fontSize: 12),
                     ),
                     style: OutlinedButton.styleFrom(
@@ -222,28 +222,29 @@ class _SearchBodyState extends ConsumerState<_SearchBody> {
                             horizontal: 12, vertical: 12)),
                   ),
                 ]),
-                const SizedBox(height: 10),
 
-                // Clear filters
-                if (_statusFilters.isNotEmpty ||
-                    _serviceFilter != null ||
-                    _dateRange != null ||
-                    _query.isNotEmpty)
+                // ── Clear button ────────────────────────────────────────
+                if (criteria.isActive) ...[
+                  const SizedBox(height: 8),
                   Align(
                     alignment: Alignment.centerRight,
                     child: TextButton.icon(
                       key: const Key('btn_clear_filters'),
                       onPressed: _clearAll,
                       icon: const Icon(Icons.filter_alt_off_outlined, size: 16),
-                      label: const Text('Clear Filters'),
+                      label: Text(
+                        'Clear ${criteria.activeCount} filter'
+                        '${criteria.activeCount == 1 ? '' : 's'}',
+                      ),
                     ),
                   ),
+                ],
               ],
             ),
           ),
         ),
 
-        // ── Results Header ───────────────────────────────────────────────────
+        // ── Results header ───────────────────────────────────────────────
         Padding(
           padding: const EdgeInsets.fromLTRB(16, 14, 16, 8),
           child: Row(children: [
@@ -253,38 +254,20 @@ class _SearchBodyState extends ConsumerState<_SearchBody> {
                     .titleSmall
                     ?.copyWith(fontWeight: FontWeight.w700)),
             const SizedBox(width: 8),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-              decoration: BoxDecoration(
-                color: Theme.of(context).colorScheme.primaryContainer,
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Text(
-                '${results.length}',
-                style: TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                    color: Theme.of(context).colorScheme.onPrimaryContainer),
-              ),
-            ),
+            _CountBadge(results.length),
             const Spacer(),
             Text(
-              '${all.length} total',
-              style: Theme.of(context)
-                  .textTheme
-                  .labelSmall
-                  ?.copyWith(color: Theme.of(context).colorScheme.outline),
+              '$total total',
+              style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                    color: Theme.of(context).colorScheme.outline),
             ),
           ]),
         ),
 
-        // ── Results List ─────────────────────────────────────────────────────
+        // ── Results list ─────────────────────────────────────────────────
         Expanded(
           child: results.isEmpty
-              ? _EmptyResults(hasFilters: _query.isNotEmpty ||
-                    _statusFilters.isNotEmpty ||
-                    _serviceFilter != null ||
-                    _dateRange != null)
+              ? _EmptyState(hasFilters: criteria.isActive)
               : ListView.separated(
                   key: const Key('list_search_results'),
                   padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
@@ -295,7 +278,7 @@ class _SearchBodyState extends ConsumerState<_SearchBody> {
                     appointment: results[i],
                     showQueueBadge: true,
                     onTap: () {
-                      // TODO (Milestone 4): Navigate to appointment detail
+                      // TODO (Milestone 5): Navigate to appointment detail.
                     },
                   ),
                 ),
@@ -307,8 +290,8 @@ class _SearchBodyState extends ConsumerState<_SearchBody> {
 
 // ── Sub-widgets ───────────────────────────────────────────────────────────────
 
-class _FilterLabel extends StatelessWidget {
-  const _FilterLabel(this.text);
+class _SectionLabel extends StatelessWidget {
+  const _SectionLabel(this.text);
   final String text;
 
   @override
@@ -322,8 +305,29 @@ class _FilterLabel extends StatelessWidget {
       );
 }
 
-class _EmptyResults extends StatelessWidget {
-  const _EmptyResults({required this.hasFilters});
+class _CountBadge extends StatelessWidget {
+  const _CountBadge(this.count);
+  final int count;
+
+  @override
+  Widget build(BuildContext context) => Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+        decoration: BoxDecoration(
+          color: Theme.of(context).colorScheme.primaryContainer,
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Text(
+          '$count',
+          style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              color: Theme.of(context).colorScheme.onPrimaryContainer),
+        ),
+      );
+}
+
+class _EmptyState extends StatelessWidget {
+  const _EmptyState({required this.hasFilters});
   final bool hasFilters;
 
   @override
@@ -341,7 +345,7 @@ class _EmptyResults extends StatelessWidget {
             const SizedBox(height: 16),
             Text(
               hasFilters
-                  ? 'No appointments match your filters.'
+                  ? 'No appointments match your filters.\nTry clearing a filter.'
                   : 'Start typing to search appointments.',
               textAlign: TextAlign.center,
               style: TextStyle(color: Colors.grey.shade500),

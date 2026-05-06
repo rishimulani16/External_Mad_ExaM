@@ -7,6 +7,7 @@ library;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../domain/appointment.dart';
 import '../domain/service_type.dart';
+import '../domain/filter_criteria.dart';
 import 'appointment_controller.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -145,3 +146,72 @@ final myAppointmentProvider = Provider<Appointment?>((ref) {
   }
 });
 
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Filter: filterProvider + filteredAppointmentsProvider
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Holds the current [FilterCriteria] for the Search & Filter screen.
+///
+/// The [SearchFilterScreen] writes to this provider via:
+///   ref.read(filterProvider.notifier).state = criteria.withQuery(q);
+///
+/// The [AppointmentListScreen] and [SearchFilterScreen] both read the derived
+/// [filteredAppointmentsProvider] which reacts automatically.
+final filterProvider = StateProvider<FilterCriteria>(
+  (_) => const FilterCriteria(), // default: no constraints
+);
+
+/// Derived: applies [FilterCriteria] against [appointmentListProvider].
+///
+/// This is the **single source of truth** for any screen displaying a
+/// filtered or searched list of appointments.
+///
+/// Filter dimensions (all applied with AND logic between dimensions):
+///   1. Text query  — case-insensitive substring match on userName OR displayId
+///   2. Status set  — OR across selected statuses; empty set = all statuses
+///   3. Service type — exact serviceType.id match
+///   4. Date range  — inclusive on dateFrom; end-of-day inclusive on dateTo
+///
+/// When [FilterCriteria.isActive] is false, returns the full unfiltered list
+/// so all screens degrade gracefully to "show everything".
+final filteredAppointmentsProvider = Provider<List<Appointment>>((ref) {
+  final all = ref.watch(appointmentListProvider);
+  final criteria = ref.watch(filterProvider);
+
+  // Fast path: no active filters.
+  if (!criteria.isActive) return all;
+
+  final q = criteria.query.toLowerCase().trim();
+
+  return all.where((a) {
+    // ── 1. Text query ─────────────────────────────────────────────────────
+    final matchesQuery = q.isEmpty ||
+        a.userName.toLowerCase().contains(q) ||
+        a.displayId.toLowerCase().contains(q) ||
+        a.serviceType.name.toLowerCase().contains(q);
+
+    // ── 2. Status (multi-select OR) ───────────────────────────────────────
+    final matchesStatus = criteria.statuses.isEmpty ||
+        criteria.statuses.contains(a.status);
+
+    // ── 3. Service type (exact) ───────────────────────────────────────────
+    final matchesService = criteria.serviceType == null ||
+        a.serviceType.id == criteria.serviceType!.id;
+
+    // ── 4. Date range (inclusive) ─────────────────────────────────────────
+    final aptDate = DateTime(
+        a.dateTime.year, a.dateTime.month, a.dateTime.day);
+
+    final afterFrom = criteria.dateFrom == null ||
+        !aptDate.isBefore(DateTime(criteria.dateFrom!.year,
+            criteria.dateFrom!.month, criteria.dateFrom!.day));
+
+    final beforeTo = criteria.dateTo == null ||
+        !aptDate.isAfter(DateTime(criteria.dateTo!.year,
+            criteria.dateTo!.month, criteria.dateTo!.day));
+
+    return matchesQuery && matchesStatus && matchesService &&
+        afterFrom && beforeTo;
+  }).toList();
+});
