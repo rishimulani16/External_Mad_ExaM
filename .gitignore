@@ -97,7 +97,6 @@ firebase-debug.*.log
 # Web
 # -----------------------------------------------------------------------------
 **/web/favicon.png~
-lib/generated_plugin_registrant.dart
 
 # -----------------------------------------------------------------------------
 # Hive — Local Database Files
