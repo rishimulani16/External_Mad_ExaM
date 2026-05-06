@@ -185,11 +185,16 @@ class _SearchBodyState extends ConsumerState<_SearchBody> {
                 const SizedBox(height: 12),
 
                 // ── Service type + date range row ───────────────────────
-                Row(children: [
+                Row(crossAxisAlignment: CrossAxisAlignment.center, children: [
                   Expanded(
                     child: DropdownButtonFormField<ServiceType?>(
                       key: const Key('field_service_filter'),
-                      value: criteria.serviceType,
+                      // Match by id so reference equality is not required.
+                      value: services.cast<ServiceType?>().firstWhere(
+                            (s) => s?.id == criteria.serviceType?.id,
+                            orElse: () => null,
+                          ),
+                      isExpanded: true,
                       decoration: const InputDecoration(
                         labelText: 'Service',
                         contentPadding: EdgeInsets.symmetric(
@@ -206,6 +211,7 @@ class _SearchBodyState extends ConsumerState<_SearchBody> {
                     ),
                   ),
                   const SizedBox(width: 10),
+                  // Override global minimumSize so button fits next to dropdown.
                   OutlinedButton.icon(
                     key: const Key('btn_date_range'),
                     onPressed: _pickDateRange,
@@ -218,8 +224,12 @@ class _SearchBodyState extends ConsumerState<_SearchBody> {
                       style: const TextStyle(fontSize: 12),
                     ),
                     style: OutlinedButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 12, vertical: 12)),
+                      // CRITICAL: override the global minimumSize(∞ width)
+                      // so this button doesn't force full-row width.
+                      minimumSize: const Size(0, 48),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 12, vertical: 12),
+                    ),
                   ),
                 ]),
 
