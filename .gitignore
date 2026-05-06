@@ -1,0 +1,154 @@
+# =============================================================================
+# Flutter — Smart Appointment Scheduling & Queue Management App
+# .gitignore  |  github.com/rishimulani16
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# Dart / Flutter — Build & Tool Artifacts
+# -----------------------------------------------------------------------------
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.pub-cache/
+.pub/
+/build/
+**/doc/api/
+
+# Generated files (Hive TypeAdapters, etc.)
+# Run `dart run build_runner build` to regenerate these.
+*.g.dart
+*.freezed.dart
+
+# Dart analysis
+.dart_analysis_cache
+
+# -----------------------------------------------------------------------------
+# Firebase — Sensitive Config (NEVER commit these)
+# -----------------------------------------------------------------------------
+# Android
+google-services.json
+
+# iOS / macOS
+GoogleService-Info.plist
+
+# Firebase CLI
+.firebaserc
+firebase-debug.log
+firebase-debug.*.log
+.firebase/
+
+# Firebase emulator data
+.runtimeconfig.json
+
+# -----------------------------------------------------------------------------
+# Android
+# -----------------------------------------------------------------------------
+**/android/app/debug/
+**/android/app/profile/
+**/android/app/release/
+**/android/.gradle/
+**/android/gradle/
+**/android/local.properties
+**/android/key.properties          # Signing keystore config — keep local only
+**/android/*.keystore              # Release keystore files
+**/android/*.jks
+**/android/captures/
+**/android/.cxx/
+**/android/app/src/main/assets/    # Generated Flutter assets
+
+# -----------------------------------------------------------------------------
+# iOS
+# -----------------------------------------------------------------------------
+**/ios/Flutter/.last_build_id
+**/ios/Flutter/flutter_export_environment.sh
+**/ios/Pods/
+**/ios/.symlinks/
+**/ios/Runner/GeneratedPluginRegistrant.m
+**/ios/Runner/GeneratedPluginRegistrant.h
+**/ios/*.xcworkspace/xcuserdata/
+**/ios/*.xcodeproj/xcuserdata/
+**/ios/*.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/
+
+# -----------------------------------------------------------------------------
+# macOS
+# -----------------------------------------------------------------------------
+**/macos/Flutter/GeneratedPluginRegistrant.swift
+**/macos/Flutter/ephemeral/
+**/macos/*.xcworkspace/xcuserdata/
+**/macos/*.xcodeproj/xcuserdata/
+**/macos/Pods/
+**/macos/.symlinks/
+
+# -----------------------------------------------------------------------------
+# Windows
+# -----------------------------------------------------------------------------
+**/windows/flutter/generated_plugin_registrant.cc
+**/windows/flutter/generated_plugin_registrant.h
+**/windows/flutter/generated_plugins.cmake
+
+# -----------------------------------------------------------------------------
+# Linux
+# -----------------------------------------------------------------------------
+**/linux/flutter/generated_plugin_registrant.cc
+**/linux/flutter/generated_plugin_registrant.h
+**/linux/flutter/generated_plugins.cmake
+
+# -----------------------------------------------------------------------------
+# Web
+# -----------------------------------------------------------------------------
+**/web/favicon.png~
+lib/generated_plugin_registrant.dart
+
+# -----------------------------------------------------------------------------
+# Hive — Local Database Files
+# Do NOT commit local Hive boxes; they are user-specific runtime data.
+# -----------------------------------------------------------------------------
+*.hive
+*.lock.hive
+
+# -----------------------------------------------------------------------------
+# IDE — IntelliJ / Android Studio / VS Code
+# -----------------------------------------------------------------------------
+.idea/
+*.iml
+*.ipr
+*.iws
+.vscode/
+*.code-workspace
+
+# -----------------------------------------------------------------------------
+# OS — macOS / Windows / Linux Junk
+# -----------------------------------------------------------------------------
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+desktop.ini
+
+# -----------------------------------------------------------------------------
+# Logs & Temp
+# -----------------------------------------------------------------------------
+*.log
+*.class
+*.pyc
+*.swp
+*.tmp
+*.bak
+*.orig
+
+# -----------------------------------------------------------------------------
+# Symbolication / Obfuscation (release builds)
+# -----------------------------------------------------------------------------
+app.*.symbols
+app.*.map.json
+
+# -----------------------------------------------------------------------------
+# Sensitive / Environment Files
+# -----------------------------------------------------------------------------
+.env
+.env.*
+secrets.dart
+secrets.json
